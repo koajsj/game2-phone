@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Posture Pulse</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Sora:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="camera-panel">
+        <video id="camera" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div class="glass status-bar">
+          <p id="statusText">Camera idle</p>
+          <button id="toggleBtn" class="btn">Start</button>
+        </div>
+      </section>
+
+      <section class="dashboard">
+        <div class="glass score-card">
+          <p class="label">Posture Score</p>
+          <p id="scoreValue" class="score">--</p>
+          <p id="qualityTag" class="tag neutral">Waiting</p>
+        </div>
+
+        <div class="glass metrics-grid">
+          <article>
+            <p class="label">Head Drift</p>
+            <p id="headTilt">--</p>
+          </article>
+          <article>
+            <p class="label">Shoulder Balance</p>
+            <p id="shoulderBalance">--</p>
+          </article>
+          <article>
+            <p class="label">Trunk Tilt</p>
+            <p id="trunkTilt">--</p>
+          </article>
+          <article>
+            <p class="label">Stability</p>
+            <p id="stability">--</p>
+          </article>
+        </div>
+
+        <div class="glass session-grid">
+          <article>
+            <p class="label">Session</p>
+            <p id="sessionTime">00:00</p>
+          </article>
+          <article>
+            <p class="label">Good Ratio</p>
+            <p id="goodRatio">0%</p>
+          </article>
+          <article>
+            <p class="label">Alert Time</p>
+            <p id="alertTime">00:00</p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <section class="privacy-note">
+      <p>Privacy: all pose analysis runs locally in your browser. No video is uploaded.</p>
+    </section>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
