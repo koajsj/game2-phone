@@ -1,8 +1,3 @@
-import {
-  FilesetResolver,
-  PoseLandmarker
-} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm";
-
 const video = document.getElementById("camera");
 const canvas = document.getElementById("overlay");
 const ctx = canvas.getContext("2d", { alpha: true });
@@ -22,7 +17,14 @@ const alertTime = document.getElementById("alertTime");
 const POSE_MODEL =
   "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task";
 
+const TASKS_VISION_MODULE_CANDIDATES = [
+  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/vision_bundle.mjs",
+  "https://unpkg.com/@mediapipe/tasks-vision@0.10.35/vision_bundle.mjs"
+];
+
 let poseLandmarker;
+let FilesetResolverClass;
+let PoseLandmarkerClass;
 let stream;
 let rafId;
 let running = false;
@@ -92,15 +94,10 @@ function drawSegment(a, b, color) {
 
 function updateQualityTag(quality) {
   qualityTag.className = "tag";
-  if (quality === "Good") {
-    qualityTag.classList.add("good");
-  } else if (quality === "Watch") {
-    qualityTag.classList.add("warn");
-  } else if (quality === "Alert") {
-    qualityTag.classList.add("alert");
-  } else {
-    qualityTag.classList.add("neutral");
-  }
+  if (quality === "Good") qualityTag.classList.add("good");
+  else if (quality === "Watch") qualityTag.classList.add("warn");
+  else if (quality === "Alert") qualityTag.classList.add("alert");
+  else qualityTag.classList.add("neutral");
   qualityTag.textContent = quality;
 }
 
@@ -110,28 +107,26 @@ function getPoseMetrics(landmarks, deltaMs) {
   const rShoulder = landmarks[12];
   const lHip = landmarks[23];
   const rHip = landmarks[24];
-
-  if (!nose || !lShoulder || !rShoulder || !lHip || !rHip) {
-    return null;
-  }
+  if (!nose || !lShoulder || !rShoulder || !lHip || !rHip) return null;
 
   const shoulderMid = { x: (lShoulder.x + rShoulder.x) / 2, y: (lShoulder.y + rShoulder.y) / 2 };
   const hipMid = { x: (lHip.x + rHip.x) / 2, y: (lHip.y + rHip.y) / 2 };
 
-  const headDrift = calcDegAgainstVertical(shoulderMid, nose);
-  const trunk = calcDegAgainstVertical(hipMid, shoulderMid);
-  const shoulderGap = Math.abs(lShoulder.y - rShoulder.y) * 100;
+  const headDriftDeg = calcDegAgainstVertical(shoulderMid, nose);
+  const trunkTiltDeg = calcDegAgainstVertical(hipMid, shoulderMid);
+  const shoulderGapPct = Math.abs(lShoulder.y - rShoulder.y) * 100;
 
   if (prevShoulderMid) {
-    const speed = Math.hypot(shoulderMid.x - prevShoulderMid.x, shoulderMid.y - prevShoulderMid.y) /
+    const speed =
+      Math.hypot(shoulderMid.x - prevShoulderMid.x, shoulderMid.y - prevShoulderMid.y) /
       Math.max(deltaMs, 1);
     smoothSpeed = smoothSpeed * 0.8 + speed * 0.2;
   }
   prevShoulderMid = shoulderMid;
 
-  const pHead = mapPenalty(headDrift, 15, 42);
-  const pShoulder = mapPenalty(shoulderGap, 2.8, 10);
-  const pTrunk = mapPenalty(trunk, 8, 24);
+  const pHead = mapPenalty(headDriftDeg, 15, 42);
+  const pShoulder = mapPenalty(shoulderGapPct, 2.8, 10);
+  const pTrunk = mapPenalty(trunkTiltDeg, 8, 24);
   const pStability = mapPenalty(smoothSpeed * 1300, 4, 20);
   const penalty = 100 * (0.36 * pHead + 0.24 * pShoulder + 0.28 * pTrunk + 0.12 * pStability);
   const rawScore = clamp(100 - penalty, 0, 100);
@@ -142,10 +137,10 @@ function getPoseMetrics(landmarks, deltaMs) {
   return {
     score: smoothScore,
     quality,
-    headDrift,
-    shoulderGap,
-    trunk,
-    stability: clamp(100 - smoothSpeed * 2200, 0, 100),
+    headDriftDeg,
+    shoulderGapPct,
+    trunkTiltDeg,
+    stabilityPct: clamp(100 - smoothSpeed * 2200, 0, 100),
     shoulderMid,
     hipMid,
     lShoulder,
@@ -159,7 +154,6 @@ function getPoseMetrics(landmarks, deltaMs) {
 function renderPose(metrics) {
   ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
   if (!metrics) return;
-
   const color =
     metrics.quality === "Good" ? "#3ddc97" : metrics.quality === "Watch" ? "#ffc857" : "#ff6978";
 
@@ -167,7 +161,6 @@ function renderPose(metrics) {
   drawSegment(metrics.lHip, metrics.rHip, color);
   drawSegment(metrics.shoulderMid, metrics.hipMid, color);
   drawSegment(metrics.shoulderMid, metrics.nose, color);
-
   drawLandmarkPoint(metrics.nose, "#6ce4ff");
   drawLandmarkPoint(metrics.lShoulder, color);
   drawLandmarkPoint(metrics.rShoulder, color);
@@ -189,10 +182,10 @@ function updateUI(metrics, deltaMs) {
         : "Adjust neck and shoulders.";
 
   scoreValue.textContent = String(Math.round(metrics.score));
-  headTilt.textContent = `${metrics.headDrift.toFixed(1)}°`;
-  shoulderBalance.textContent = `${metrics.shoulderGap.toFixed(1)}%`;
-  trunkTilt.textContent = `${metrics.trunk.toFixed(1)}°`;
-  stability.textContent = `${Math.round(metrics.stability)}%`;
+  headTilt.textContent = `${metrics.headDriftDeg.toFixed(1)} deg`;
+  shoulderBalance.textContent = `${metrics.shoulderGapPct.toFixed(1)}%`;
+  trunkTilt.textContent = `${metrics.trunkTiltDeg.toFixed(1)} deg`;
+  stability.textContent = `${Math.round(metrics.stabilityPct)}%`;
   updateQualityTag(metrics.quality);
 
   session.totalMs += deltaMs;
@@ -204,20 +197,54 @@ function updateUI(metrics, deltaMs) {
   alertTime.textContent = formatMs(session.alertMs);
 }
 
+async function loadTasksVisionModule() {
+  if (FilesetResolverClass && PoseLandmarkerClass) return;
+
+  let lastError = null;
+  for (const url of TASKS_VISION_MODULE_CANDIDATES) {
+    try {
+      statusText.textContent = `Loading engine from ${new URL(url).host}...`;
+      const mod = await import(url);
+      FilesetResolverClass = mod.FilesetResolver;
+      PoseLandmarkerClass = mod.PoseLandmarker;
+      return;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw new Error(`Engine load failed. ${lastError?.message || lastError || ""}`.trim());
+}
+
 async function initPoseLandmarker() {
   if (poseLandmarker) return poseLandmarker;
+  await loadTasksVisionModule();
+
   statusText.textContent = "Loading pose model...";
-  const vision = await FilesetResolver.forVisionTasks(
-    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm"
-  );
-  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-    baseOptions: {
-      modelAssetPath: POSE_MODEL,
-      delegate: "GPU"
-    },
-    runningMode: "VIDEO",
-    numPoses: 1
-  });
+  let vision;
+  try {
+    vision = await FilesetResolverClass.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm"
+    );
+  } catch {
+    vision = await FilesetResolverClass.forVisionTasks(
+      "https://unpkg.com/@mediapipe/tasks-vision@0.10.35/wasm"
+    );
+  }
+
+  try {
+    poseLandmarker = await PoseLandmarkerClass.createFromOptions(vision, {
+      baseOptions: { modelAssetPath: POSE_MODEL, delegate: "GPU" },
+      runningMode: "VIDEO",
+      numPoses: 1
+    });
+  } catch {
+    poseLandmarker = await PoseLandmarkerClass.createFromOptions(vision, {
+      baseOptions: { modelAssetPath: POSE_MODEL, delegate: "CPU" },
+      runningMode: "VIDEO",
+      numPoses: 1
+    });
+  }
+
   return poseLandmarker;
 }
 
@@ -260,7 +287,6 @@ function loop(ts) {
 
   const deltaMs = Math.min(66, ts - lastFrameTs || 16.6);
   lastFrameTs = ts;
-
   if (video.currentTime === lastVideoTime) return;
   lastVideoTime = video.currentTime;
 
@@ -285,6 +311,7 @@ async function toggleRun() {
   try {
     toggleBtn.disabled = true;
     toggleBtn.textContent = "Starting...";
+    statusText.textContent = "Preparing camera and model...";
     await initPoseLandmarker();
     await startCamera();
     resetSessionState();
@@ -293,7 +320,7 @@ async function toggleRun() {
     statusText.textContent = "Analyzing posture...";
     rafId = requestAnimationFrame(loop);
   } catch (err) {
-    statusText.textContent = `Failed to start: ${err.message || err}`;
+    statusText.textContent = `Failed to start: ${err?.message || err}. Check camera permission and network.`;
   } finally {
     toggleBtn.disabled = false;
     if (!running) toggleBtn.textContent = "Start";
