@@ -1,7 +1,7 @@
 import {
   FilesetResolver,
   PoseLandmarker
-} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22";
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm";
 
 const video = document.getElementById("camera");
 const canvas = document.getElementById("overlay");
@@ -305,5 +305,10 @@ window.addEventListener("resize", resizeCanvasToDisplaySize);
 
 if (!("mediaDevices" in navigator) || !("getUserMedia" in navigator.mediaDevices)) {
   statusText.textContent = "Your browser does not support camera APIs.";
+  toggleBtn.disabled = true;
+}
+
+if (!window.isSecureContext) {
+  statusText.textContent = "Camera requires HTTPS or localhost.";
   toggleBtn.disabled = true;
 }
