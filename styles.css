@@ -38,11 +38,12 @@ body {
 
 .camera-panel {
   position: relative;
-  aspect-ratio: 9 / 16;
+  aspect-ratio: 3 / 4;
   border-radius: 20px;
   overflow: hidden;
   border: 1px solid var(--line);
   box-shadow: 0 28px 60px rgba(0, 0, 0, 0.35);
+  max-height: 58vh;
 }
 
 #camera,
@@ -61,6 +62,7 @@ body {
 
 #overlay {
   pointer-events: none;
+  transform: scaleX(-1);
 }
 
 .glass {
