@@ -10,6 +10,7 @@ const headTilt = document.getElementById("headTilt");
 const shoulderBalance = document.getElementById("shoulderBalance");
 const trunkTilt = document.getElementById("trunkTilt");
 const stability = document.getElementById("stability");
+const framing = document.getElementById("framing");
 const sessionTime = document.getElementById("sessionTime");
 const goodRatio = document.getElementById("goodRatio");
 const alertTime = document.getElementById("alertTime");
@@ -115,6 +116,9 @@ function getPoseMetrics(landmarks, deltaMs) {
   const headDriftDeg = calcDegAgainstVertical(shoulderMid, nose);
   const trunkTiltDeg = calcDegAgainstVertical(hipMid, shoulderMid);
   const shoulderGapPct = Math.abs(lShoulder.y - rShoulder.y) * 100;
+  const shoulderWidth = Math.abs(lShoulder.x - rShoulder.x);
+  const torsoHeight = Math.abs(hipMid.y - shoulderMid.y);
+  const bodyScale = shoulderWidth + torsoHeight;
 
   if (prevShoulderMid) {
     const speed =
@@ -128,11 +132,16 @@ function getPoseMetrics(landmarks, deltaMs) {
   const pShoulder = mapPenalty(shoulderGapPct, 2.8, 10);
   const pTrunk = mapPenalty(trunkTiltDeg, 8, 24);
   const pStability = mapPenalty(smoothSpeed * 1300, 4, 20);
-  const penalty = 100 * (0.36 * pHead + 0.24 * pShoulder + 0.28 * pTrunk + 0.12 * pStability);
+  const pTooClose = mapPenalty(bodyScale, 0.56, 0.76);
+  const pTooFar = mapPenalty(0.24 - bodyScale, 0.02, 0.08);
+  const pFraming = Math.max(pTooClose, pTooFar);
+  const penalty =
+    100 * (0.3 * pHead + 0.2 * pShoulder + 0.22 * pTrunk + 0.1 * pStability + 0.18 * pFraming);
   const rawScore = clamp(100 - penalty, 0, 100);
   smoothScore = smoothScore * 0.84 + rawScore * 0.16;
 
   const quality = smoothScore >= 82 ? "Good" : smoothScore >= 65 ? "Watch" : "Alert";
+  const framingState = bodyScale > 0.66 ? "Too Close" : bodyScale < 0.22 ? "Too Far" : "Good";
 
   return {
     score: smoothScore,
@@ -141,6 +150,8 @@ function getPoseMetrics(landmarks, deltaMs) {
     shoulderGapPct,
     trunkTiltDeg,
     stabilityPct: clamp(100 - smoothSpeed * 2200, 0, 100),
+    framingState,
+    framingScore: Math.round((1 - pFraming) * 100),
     shoulderMid,
     hipMid,
     lShoulder,
@@ -175,7 +186,11 @@ function updateUI(metrics, deltaMs) {
   }
 
   statusText.textContent =
-    metrics.quality === "Good"
+    metrics.framingState === "Too Close"
+      ? "Move back slightly. Face/body too large for stable scoring."
+      : metrics.framingState === "Too Far"
+        ? "Move closer slightly. Body is too small in frame."
+        : metrics.quality === "Good"
       ? "Posture stable."
       : metrics.quality === "Watch"
         ? "Minor drift detected."
@@ -186,6 +201,7 @@ function updateUI(metrics, deltaMs) {
   shoulderBalance.textContent = `${metrics.shoulderGapPct.toFixed(1)}%`;
   trunkTilt.textContent = `${metrics.trunkTiltDeg.toFixed(1)} deg`;
   stability.textContent = `${Math.round(metrics.stabilityPct)}%`;
+  framing.textContent = `${metrics.framingState} (${metrics.framingScore}%)`;
   updateQualityTag(metrics.quality);
 
   session.totalMs += deltaMs;
