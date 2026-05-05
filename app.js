@@ -266,6 +266,7 @@ function stopCamera() {
   if (!stream) return;
   stream.getTracks().forEach((track) => track.stop());
   stream = null;
+  video.srcObject = null;
 }
 
 function resetSessionState() {
@@ -305,6 +306,7 @@ async function toggleRun() {
     cancelAnimationFrame(rafId);
     stopCamera();
     ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+    updateQualityTag("Waiting");
     return;
   }
 
@@ -320,6 +322,9 @@ async function toggleRun() {
     statusText.textContent = "Analyzing posture...";
     rafId = requestAnimationFrame(loop);
   } catch (err) {
+    running = false;
+    cancelAnimationFrame(rafId);
+    stopCamera();
     statusText.textContent = `Failed to start: ${err?.message || err}. Check camera permission and network.`;
   } finally {
     toggleBtn.disabled = false;
