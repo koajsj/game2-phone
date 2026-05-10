@@ -1,74 +1,202 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Posture Pulse</title>
+    <meta name="theme-color" content="#07111f" />
+    <title>Posture Analyzer</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Sora:wght@500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;800&family=Sora:wght@500;700;800&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body>
-    <main class="app-shell">
-      <section class="camera-panel">
-        <video id="camera" playsinline muted></video>
-        <canvas id="overlay"></canvas>
-        <div class="glass status-bar">
-          <p id="statusText">Camera idle</p>
-          <button id="toggleBtn" class="btn">Start</button>
+  <body data-state="idle">
+    <div class="page-aura" aria-hidden="true"></div>
+
+    <main class="layout">
+      <section class="hero-panel glass">
+        <div class="hero-copy">
+          <p class="eyebrow">POSTURE ANALYZER</p>
+          <h1>实时坐姿评估</h1>
+          <p class="hero-text">
+            本地分析头部偏移、肩线平衡、躯干倾斜和稳定度，持续给出更直接的纠正建议。
+          </p>
+          <div class="hero-actions">
+            <button id="toggleBtn" class="btn btn-primary">开始检测</button>
+            <button id="resetBtn" class="btn btn-secondary" disabled>重置会话</button>
+          </div>
+        </div>
+
+        <div class="camera-stage">
+          <div class="camera-shell">
+            <video id="camera" playsinline muted></video>
+            <canvas id="overlay"></canvas>
+            <div id="cameraEmpty" class="camera-empty">
+              <p>摄像头待命</p>
+              <span>请将头部和肩部保持在取景框中央</span>
+            </div>
+            <div class="camera-guide" aria-hidden="true">
+              <span class="guide guide-top"></span>
+              <span class="guide guide-right"></span>
+              <span class="guide guide-bottom"></span>
+              <span class="guide guide-left"></span>
+            </div>
+            <div class="scanline" aria-hidden="true"></div>
+          </div>
+
+          <div class="camera-footer glass">
+            <div class="status-stack">
+              <p class="mini-label">实时状态</p>
+              <p id="statusText">点击开始，进行本地姿势检测。</p>
+            </div>
+            <p id="modePill" class="mode-pill idle">待机</p>
+          </div>
         </div>
       </section>
 
-      <section class="dashboard">
-        <div class="glass score-card">
-          <p class="label">Posture Score</p>
-          <p id="scoreValue" class="score">--</p>
-          <p id="qualityTag" class="tag neutral">Waiting</p>
-        </div>
+      <aside class="dashboard">
+        <section class="glass score-card" id="scoreCard">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">综合评分</p>
+              <h2>姿态总览</h2>
+            </div>
+            <p id="qualityTag" class="tag neutral">待机</p>
+          </div>
 
-        <div class="glass metrics-grid">
-          <article>
-            <p class="label">Head Drift</p>
-            <p id="headTilt">--</p>
-          </article>
-          <article>
-            <p class="label">Shoulder Balance</p>
-            <p id="shoulderBalance">--</p>
-          </article>
-          <article>
-            <p class="label">Trunk Tilt</p>
-            <p id="trunkTilt">--</p>
-          </article>
-          <article>
-            <p class="label">Stability</p>
-            <p id="stability">--</p>
-          </article>
-        </div>
+          <div class="score-layout">
+            <div id="scoreRing" class="score-ring" style="--score-angle: 0deg">
+              <div class="score-core">
+                <p id="scoreValue" class="score-value">--</p>
+                <span>/ 100</span>
+              </div>
+            </div>
 
-        <div class="glass session-grid">
-          <article>
-            <p class="label">Session</p>
-            <p id="sessionTime">00:00</p>
-          </article>
-          <article>
-            <p class="label">Good Ratio</p>
-            <p id="goodRatio">0%</p>
-          </article>
-          <article>
-            <p class="label">Alert Time</p>
-            <p id="alertTime">00:00</p>
-          </article>
-        </div>
-      </section>
+            <div class="score-copy">
+              <h3 id="coachTitle">保持自然坐姿</h3>
+              <p id="coachSummary">
+                检测启动后会持续计算姿态分数，并根据变化趋势刷新建议。
+              </p>
+              <div class="trend-panel">
+                <div class="trend-head">
+                  <p class="label">稳定趋势</p>
+                  <p id="trendCaption">等待数据</p>
+                </div>
+                <canvas id="trendCanvas" width="280" height="96"></canvas>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="glass metrics-card">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">关键指标</p>
+              <h2>动作拆解</h2>
+            </div>
+            <p class="section-note">数值越平稳越好</p>
+          </div>
+
+          <div class="metrics-grid">
+            <article class="metric-item">
+              <div class="metric-top">
+                <p class="label">头部偏移</p>
+                <p id="headTilt">--</p>
+              </div>
+              <div class="metric-rail"><span id="headTiltBar"></span></div>
+            </article>
+
+            <article class="metric-item">
+              <div class="metric-top">
+                <p class="label">肩线平衡</p>
+                <p id="shoulderBalance">--</p>
+              </div>
+              <div class="metric-rail"><span id="shoulderBalanceBar"></span></div>
+            </article>
+
+            <article class="metric-item">
+              <div class="metric-top">
+                <p class="label">躯干倾斜</p>
+                <p id="trunkTilt">--</p>
+              </div>
+              <div class="metric-rail"><span id="trunkTiltBar"></span></div>
+            </article>
+
+            <article class="metric-item">
+              <div class="metric-top">
+                <p class="label">稳定度</p>
+                <p id="stability">--</p>
+              </div>
+              <div class="metric-rail"><span id="stabilityBar"></span></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="glass cues-card">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">纠正建议</p>
+              <h2>当前重点</h2>
+            </div>
+            <p id="focusArea" class="section-note">等待分析</p>
+          </div>
+
+          <div class="cue-list">
+            <article class="cue-item">
+              <p class="cue-index">01</p>
+              <h3 id="cue1Title">启动检测后开始提示</h3>
+              <p id="cue1Text">系统会先确认你的头部、肩部和髋部是否完整进入画面。</p>
+            </article>
+            <article class="cue-item">
+              <p class="cue-index">02</p>
+              <h3 id="cue2Title">维持自然呼吸</h3>
+              <p id="cue2Text">避免刻意僵直，保持轻微放松更容易获得稳定分数。</p>
+            </article>
+            <article class="cue-item">
+              <p class="cue-index">03</p>
+              <h3 id="cue3Title">使用本地模式</h3>
+              <p id="cue3Text">全部分析都在浏览器本地完成，不上传视频内容。</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="glass session-card">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">会话数据</p>
+              <h2>持续表现</h2>
+            </div>
+            <p id="sessionState" class="section-note">未开始</p>
+          </div>
+
+          <div class="session-grid">
+            <article>
+              <p class="label">检测时长</p>
+              <p id="sessionTime">00:00</p>
+            </article>
+            <article>
+              <p class="label">优秀占比</p>
+              <p id="goodRatio">0%</p>
+            </article>
+            <article>
+              <p class="label">预警时长</p>
+              <p id="alertTime">00:00</p>
+            </article>
+            <article>
+              <p class="label">有效帧数</p>
+              <p id="samplesSeen">0</p>
+            </article>
+          </div>
+        </section>
+      </aside>
     </main>
 
-    <section class="privacy-note">
-      <p>Privacy: all pose analysis runs locally in your browser. No video is uploaded.</p>
-    </section>
+    <footer class="bottom-strip">
+      <p>隐私说明：姿态识别完全在当前浏览器本地执行，不会上传任何视频数据。</p>
+    </footer>
 
     <script type="module" src="./app.js"></script>
   </body>
