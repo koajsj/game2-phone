@@ -57,6 +57,9 @@ const TASKS_VISION_MODULE_CANDIDATES = [
   }
 ];
 
+const MIN_LANDMARK_VISIBILITY = 0.45;
+const MAX_SOFT_MISSES = 8;
+
 const EMPTY_RECOMMENDATIONS = {
   focusArea: "等待画面",
   items: [
@@ -126,6 +129,7 @@ const state = {
   smoothScore: 80,
   smoothSpeed: 0,
   prevShoulderMid: null,
+  missingFrames: 0,
   history: []
 };
 
@@ -151,6 +155,10 @@ function calcDegAgainstVertical(from, to) {
   const len = Math.hypot(dx, dy) || 1;
   const cos = clamp(-dy / len, -1, 1);
   return (Math.acos(cos) * 180) / Math.PI;
+}
+
+function hasReliableLandmark(point) {
+  return Boolean(point) && (point.visibility == null || point.visibility >= MIN_LANDMARK_VISIBILITY);
 }
 
 function formatMs(ms) {
@@ -396,7 +404,13 @@ function getPoseMetrics(landmarks, deltaMs) {
   const leftHip = landmarks[23];
   const rightHip = landmarks[24];
 
-  if (!nose || !leftShoulder || !rightShoulder || !leftHip || !rightHip) {
+  if (
+    !hasReliableLandmark(nose) ||
+    !hasReliableLandmark(leftShoulder) ||
+    !hasReliableLandmark(rightShoulder) ||
+    !hasReliableLandmark(leftHip) ||
+    !hasReliableLandmark(rightHip)
+  ) {
     return null;
   }
 
@@ -523,14 +537,19 @@ function updateMetricsPanel(metrics) {
 
 function updateInsights(metrics, deltaMs) {
   if (!metrics) {
+    state.missingFrames += 1;
     ui.statusText.textContent = "未检测到完整上半身，请回到取景框中央。";
     ui.focusArea.textContent = EMPTY_RECOMMENDATIONS.focusArea;
     setQualityState("waiting");
+    if (state.missingFrames > MAX_SOFT_MISSES) {
+      setScore(null);
+    }
     updateMetricsPanel(null);
     updateCueCards(EMPTY_RECOMMENDATIONS.items);
     return;
   }
 
+  state.missingFrames = 0;
   const qualityStatus =
     metrics.quality === "good"
       ? "姿态稳定，继续保持。"
@@ -629,6 +648,7 @@ function resetSessionState() {
   state.smoothScore = 80;
   state.smoothSpeed = 0;
   state.prevShoulderMid = null;
+  state.missingFrames = 0;
   state.lastVideoTime = -1;
   state.lastFrameTs = performance.now();
   state.history = [];
